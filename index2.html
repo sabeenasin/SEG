@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
   </head>
   <body>
     <a-scene>
@@ -12,15 +12,13 @@
       <a-plane position="0 0 0" rotation="-90 0 0" width="50" height="50" color="#228B22"></a-plane>
       
       <!-- Mountains -->
-      <a-cone position="-5 1 -10" radius-bottom="5" height="6" color="#8B4513"></a-cone>
-      <a-cone position="5 1 -15" radius-bottom="7" height="8" color="#A0522D"></a-cone>
+      <a-image src="mountain1.png" position="-5 3 -10" width="6" height="6"></a-image>
+      <a-image src="mountain2.png" position="5 4 -15" width="8" height="8"></a-image>
 
       <!-- Trees -->
-      <a-cylinder position="-3 1.5 -5" radius="0.3" height="3" color="#8B4513"></a-cylinder>
-      <a-sphere position="-3 3 -5" radius="1" color="#228B22"></a-sphere>
-      
-      <a-cylinder position="4 1.5 -7" radius="0.3" height="3" color="#8B4513"></a-cylinder>
-      <a-sphere position="4 3 -7" radius="1" color="#228B22"></a-sphere>
+      <a-image src="tree1.png" position="-3 2 -5" width="2" height="3"></a-image>
+      <a-image src="tree2.png" position="4 2 -7" width="2" height="3"></a-image>
     </a-scene>
   </body>
 </html>
+
