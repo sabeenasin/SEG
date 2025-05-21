@@ -1,0 +1,276 @@
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dahlia</title>
+
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>  
+  <script src="https://cdn.jsdelivr.net/npm/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.5.4/dist/aframe-extras.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.2.2/dist/aframe-physics-system.min.js"></script>
+
+  <script>
+    // CUSTOM COMPONENT: real-sun-controller
+    AFRAME.registerComponent("real-sun-controller", {
+      schema: { /* ... (Your NJ Lat/Lon settings) ... */ 
+        latitude: { type: "number", default: 40.9489 }, longitude: { type: "number", default: -74.2736 },
+        targetEnvironmentId: { type: "string", default: "myCoolEnvironment" }, updateInterval: { type: "number", default: 0 },
+        daySkyColor: { type: "color", default: "#87CEEB" }, nightSkyColor: { type: "color", default: "#000011" },
+        twilightSkyColor: { type: "color", default: "#1c3a56" }, dayLightIntensity: { type: "number", default: 0.9 },
+        nightLightIntensity: { type: "number", default: 0.05 }, twilightLightIntensity: { type: "number", default: 0.2 },
+        dayExposure: { type: "number", default: 0.8 }, nightExposure: { type: "number", default: 0.05 },    
+        twilightExposure: { type: "number", default: 0.2 }
+      },
+      init: function () { /* ... Your existing init logic ... */ 
+        if (typeof SunCalc === 'undefined') { console.error("SunCalc library not found."); return; }
+        console.log("Real Sun Controller INITIALIZED. Target:", this.data.targetEnvironmentId, "Lat:", this.data.latitude, "Lon:", this.data.longitude);
+        this.updateSunPosition();
+      },
+      updateSunPosition: function () { /* ... Your existing updateSunPosition logic ... */ 
+        var now = new Date(); var sunPos = SunCalc.getPosition(now, this.data.latitude, this.data.longitude);
+        let altitude = sunPos.altitude; let suncalcAzimuth = sunPos.azimuth;
+        var sunPositionVec = { x: Math.cos(altitude) * (-Math.sin(suncalcAzimuth)), y: Math.sin(altitude), z: Math.cos(altitude) * (Math.cos(suncalcAzimuth)) };
+        console.log("Calculated A-Frame sunPosition vector:", "x:", sunPositionVec.x.toFixed(2), "y:", sunPositionVec.y.toFixed(2), "z:", sunPositionVec.z.toFixed(2));
+        const envEntity = document.getElementById(this.data.targetEnvironmentId);
+        if (envEntity) {
+          let newSkyColor, newLightIntensity, newExposure, skyState;
+          if (altitude < -0.1) { skyState = "Night"; newSkyColor = this.data.nightSkyColor; newLightIntensity = this.data.nightLightIntensity; newExposure = this.data.nightExposure;
+          } else if (altitude < 0.087) { skyState = "Twilight"; newSkyColor = this.data.twilightSkyColor; newLightIntensity = this.data.twilightLightIntensity; newExposure = this.data.twilightExposure;
+          } else { skyState = "Day"; newSkyColor = this.data.daySkyColor; newLightIntensity = this.data.dayLightIntensity; newExposure = this.data.dayExposure; }
+          envEntity.setAttribute('environment', 'sunPosition', sunPositionVec);
+          envEntity.setAttribute('environment', 'skyColor', newSkyColor);s
+          envEntity.setAttribute('environment', 'horizonColor', newSkyColor); 
+          envEntity.setAttribute('environment', 'lightIntensity', newLightIntensity);
+          envEntity.setAttribute('environment', 'exposure', newExposure);
+          console.log("Updated #" + this.data.targetEnvironmentId + " -> skyColor:", newSkyColor, ", lightIntensity:", newLightIntensity, ", exposure:", newExposure);
+        } else { console.error("Target environment entity with ID '" + this.data.targetEnvironmentId + "' not found."); }
+      }
+    });
+
+    // CUSTOM COMPONENT: sound-events
+    AFRAME.registerComponent("sound-events", { /* ... Your existing definition ... */ 
+      init: function () {
+        var el = this.el;
+        el.addEventListener("click", function () {
+          if (el.components.sound && el.components.sound.loaded) { el.components.sound.playSound();
+          } else { console.warn("Sound component not ready/loaded for click on:", el.id); }
+        });
+        el.addEventListener("mouseleave", function () {
+          if (el.components.sound && el.components.sound.loaded && el.components.sound.isPlaying) { el.components.sound.pauseSound(); }
+        });
+      }
+    });
+
+    // CUSTOM COMPONENT: toggle-candle
+    AFRAME.registerComponent("toggle-candle", { /* ... Your existing definition ... */ 
+      schema: {isLit: { type: "boolean", default: false },flameColor: { type: "color", default: "orange" },litLightIntensity: { type: "number", default: 0.7 },unlitLightIntensity: { type: "number", default: 0.0 }},
+      init: function () {
+        this.flameEl = this.el.querySelector(".candleFlame"); this.lightEl = this.el.querySelector(".candleLight"); 
+        if (!this.flameEl) { console.warn("toggle-candle on #" + this.el.id +': No child entity with class "candleFlame" found.');}
+        if (!this.lightEl) { console.warn("toggle-candle on #" + this.el.id +': No child entity with class "candleLight" found.');}
+        this.el.addEventListener("click", this.toggleLight.bind(this)); this.updateVisuals(); 
+        console.log("Toggle-candle component INITIALIZED for:",this.el.id,"Initial isLit state:",this.data.isLit);
+      },
+      update: function (oldData) { if (oldData.isLit !== this.data.isLit) { this.updateVisuals(); } },
+      toggleLight: function () { this.data.isLit = !this.data.isLit; console.log("Candle CLICKED:", this.el.id, "Now Lit:", this.data.isLit); this.updateVisuals(); this.el.emit(this.data.isLit ? "candle-lit" : "candle-extinguished"); },
+      updateVisuals: function () { /* ... Your existing updateVisuals ... */ 
+        if (this.flameEl) {
+          this.flameEl.setAttribute("visible", this.data.isLit);
+          if (this.data.isLit) {
+            this.flameEl.setAttribute("material","emissive",this.data.flameColor);
+            this.flameEl.setAttribute("material","emissiveIntensity",1.5);
+            this.flameEl.setAttribute("material","opacity",0.75); this.flameEl.setAttribute("material","transparent",true);
+          } else {this.flameEl.setAttribute("material", "emissiveIntensity", 0);}
+        }
+        if (this.lightEl) {
+          this.lightEl.setAttribute("light","intensity",this.data.isLit ? this.data.litLightIntensity : this.data.unlitLightIntensity);
+          this.lightEl.setAttribute("visible", this.data.isLit);
+        }
+      }
+    });
+
+    // CUSTOM COMPONENT: click-to-toggle-video
+    AFRAME.registerComponent('click-to-toggle-video', { /* ... Your existing definition ... */ 
+      schema: { videoEl: {type: 'selector'} },
+      init: function () {
+        if (!this.data.videoEl) { console.error('click-to-toggle-video: Video element not found for', this.el.id); return; }
+        this.videoElement = this.data.videoEl; this.videoElement.loop = this.videoElement.hasAttribute('loop');
+        this.el.addEventListener('click', this.togglePlay.bind(this));
+        console.log('click-to-toggle-video initialized for:', this.el.id, 'linked to video:', this.videoElement.id);
+      },
+      togglePlay: function () { /* ... Your existing togglePlay ... */ 
+        if (!this.videoElement) return;
+        const sceneEl = this.el.sceneEl; 
+        if (sceneEl && sceneEl.audioListener && sceneEl.audioListener.context && sceneEl.audioListener.context.state === 'suspended') {
+          sceneEl.audioListener.context.resume().catch(e => console.warn("AudioContext resume failed:", e));
+        }
+        if (this.videoElement.paused) {
+          if (this.videoElement.muted) { this.videoElement.muted = false; console.log('Video:', this.videoElement.id, 'was unmuted.');}
+          if (this.videoElement.volume < 0.1 && !this.videoElement.hasAttribute('volume')) { this.videoElement.volume = 0.4; console.log('Video:', this.videoElement.id, 'volume set to 1.0.');}
+          this.videoElement.play().then(() => { console.log('Video:', this.videoElement.id, 'PLAYING.'); this.el.emit('videostarted'); })
+            .catch(e => console.error('Video play failed for:', this.videoElement.id, e));
+        } else { this.videoElement.pause(); console.log('Video:', this.videoElement.id, 'PAUSED.'); this.el.emit('videopaused');}
+      },
+      remove: function() { if (this.el) { this.el.removeEventListener('click', this.togglePlay); } }
+    });
+  </script>
+</head>
+<body>
+  <div id="start-button-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.75); z-index: 10001; display: flex; justify-content: center; align-items: center; cursor: pointer;">
+    <button id="start-experience-button" style="font-size: 2em; padding: 20px 40px;">Start Experience</button>
+  </div>
+
+  <a-scene background="color: #111111" physics="gravity: -9.8; debug: false;">
+    <a-assets timeout="15000">
+      <audio id="croissant_sound" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/audio_1.mp3?v=1747797642863" preload="auto"></audio>
+              <audio id="croissant_sound_2" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/audio_2.mp3?v=1747797644922" preload="auto"></audio>             
+        <audio id="croissant_sound_3" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/audio_3.mp3?v=1747797647044" preload="auto"></audio>
+        <audio id="XXY" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/andy.m4a?v=1747797632908" preload="auto"></audio>
+                <audio id="XXX" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/apartment.m4a?v=1747797638683" preload="auto"></audio>
+                <audio id="croissant_sound_1" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/crazy.m4a?v=1747797650477" preload="auto"></audio>
+
+
+
+      <audio id="gnons_sound" src="https://cdn.glitch.me/054185fd-b3fd-4188-960a-f223d2aeefe3/gnons.wav?v=1747670030977" preload="auto"></audio>
+      <audio id="ocean_ambience_sound" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/ocean.wav?v=1747695192528" preload="auto"></audio>
+      
+      <a-asset-item id="hotdogAsset" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/hotdog.glb?v=1747670021066"></a-asset-item>
+      <a-asset-item id="bananaAsset" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/nana.gltf?v=1747670024449"></a-asset-item>
+      <a-asset-item id="coconutAsset" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/coconut.gltf?v=1747670009483"></a-asset-item>
+      <a-asset-item id="cherryAsset" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/watermelon.gltf?v=1747797724108"></a-asset-item>
+      <a-asset-item id="dahliaAsset" src="https://cdn.glitch.me/054185fd-b3fd-4188-960a-f223d2aeefe3/dahlia_altar.gltf?v=1747797134325"></a-asset-item>
+              <a-asset-item id="tacoAsset" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/taco.gltf?v=1747797155431"></a-asset-item>
+
+      
+      <img id="grassTexture" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/grass.jpg?v=1747695188707" crossorigin="anonymous" />
+      <img id="OmegleIMG" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/omegle.jpg?v=1747772430903" crossorigin="anonymous" /> 
+      <a-asset-item id="candleAsset" src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/one_birthday_candle.glb?v=1747695193853"></a-asset-item>
+      
+      <video id="myInteractiveVideo" 
+             src="https://cdn.glitch.me/054185fd-b3fd-4188-960a-f223d2aeefe3/good_day.mp4.mov?v=1747797576597"
+             preload="auto" loop="true" autoplay="false" 
+             playsinline webkit-playsinline crossorigin="anonymous">
+      </video>
+        
+              <video id="Whatsapp" 
+             src="https://cdn.glitch.global/054185fd-b3fd-4188-960a-f223d2aeefe3/whatsapp.mp4?v=1747797483691"
+             preload="auto" loop="true" autoplay="false" 
+             playsinline webkit-playsinline crossorigin="anonymous">
+      </video>
+    </a-assets>
+        
+
+    <a-entity id="playerRig" movement-controls="speed: 0.2;" position="0 0.1 5">
+      <a-entity id="playerCamera" camera="active: true" look-controls="pointerLockEnabled: true" position="0 1.6 0">
+        <a-cursor raycaster="objects: .clickable;"></a-cursor>
+      </a-entity>
+    </a-entity>
+
+    <a-entity id="myCoolEnvironment" 
+              environment="preset: none; active: true; skyType: color; skyColor: #87CEEB; horizonColor: #87CEEB; lighting: distant; lightIntensity: 0.9; exposure: 0.8; sunPosition: 0 0.5 -1; fog: 0; ground: none; dressing: none; grid: none; shadow: false;">
+    </a-entity>
+    <a-entity real-sun-controller="targetEnvironmentId: myCoolEnvironment; updateInterval: 0;"></a-entity>
+
+    <a-entity id="ambientSoundPlayer" sound="src: #ocean_ambience_sound; autoplay: true; loop: true; positional: false; volume: 0.1;"></a-entity>
+
+    <a-plane id="islandGround" position="0 0 0" rotation="-90 0 0" width="40" height="40" material="src: #grassTexture; repeat: 20 20;" static-body shadow="receive: true"></a-plane>
+    <a-ocean position="0 -0.5 0" width="100" depth="100" density="5" speed="1" color="#225588" opacity="0.5" normalMap="url(https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/waternormals.jpg)" normalScale="0.2 0.2"></a-ocean>
+
+    <a-image id="Omegle" src="#OmegleIMG" width="10.5" height="6" position="-3 3 -3"></a-image>
+
+    <a-video id="GoodDayVideoScreen1" class="clickable" src="#myInteractiveVideo" width="2.3" height="4" position="11 1.5 -3"
+             click-to-toggle-video="videoEl: #myInteractiveVideo">
+    </a-video>
+      
+        <a-video id="GoodDayVideoScreen2" class="clickable" src="#Whatsapp" width="2.3" height="4" position="15 1.5 -3"
+             click-to-toggle-video="videoEl: #Whatsapp">
+    </a-video>
+      
+
+            <a-gltf-model src="#candleAsset" scale="1 1 1" position="8.15 2 0.25"></a-gltf-model>
+      
+          <a-entity 
+      id="ClickCandle" class="clickable" 
+      toggle-candle="isLit: false; flameColor: #FFB74D; litLightIntensity: 0.8;" toggle-candle="isLit: false; flameColor: #FFB74D; litLightIntensity: 0.7;" 
+      position="8.15 2 0.25"   geometry="primitive: box; width: 1; height: 1; depth: 1" 
+      material="color: none; opacity: 0; transparent: true" 
+      position="8.15 2 0.25">
+              
+              
+<a-cone class="candleFlame" scale = "7 7 7" radius-bottom="0.025" radius-top="0.005" height="0.08" material="shader: flat; color: orange; emissive: orange; emissiveIntensity: 10; opacity: 0.5;" position="0 1.1 0" visible="false"></a-cone>
+              
+
+            <a-entity class="candleLight" light="type: point; intensity: 10; color: #FFB74D; distance: 3; decay: 1.5; castShadow: true;" position="0 1 0" visible="false"></a-entity>
+      
+
+        
+    </a-entity>
+      
+                 <a-gltf-model src="#candleAsset" scale="1 1 1" position="8.15 2 0.25"></a-gltf-model>
+      
+          <a-entity 
+      id="ClickCandle" class="clickable" 
+      toggle-candle="isLit: false; flameColor: #FFB74D; litLightIntensity: 0.8;" toggle-candle="isLit: false; flameColor: #FFB74D; litLightIntensity: 0.7;" 
+      position="8.15 2 0.25"   geometry="primitive: box; width: 0.15; height: 0.4; depth: 0.15" 
+      material="color: blue; opacity: 1; transparent: true" 
+      position="8.15 2 0.25">
+        
+        
+      <a-cone class="candleFlame" scale = "5 5 5" radius-bottom="0.025" radius-top="0" height="0.08" material="shader: flat; color: orange; emissive: orange; emissiveIntensity: 0; opacity: 0.75; transparent: true;" position="0 1 0" visible="false"></a-cone>
+
+            <a-entity class="candleLight" light="type: point; intensity: 10; color: #FFB74D; distance: 3; decay: 1.5; castShadow: true;" position="0 1 0" visible="false"></a-entity>
+      
+
+        
+    </a-entity>
+      
+      
+      
+      
+      
+  <a-gltf-model id="hotdogEntity" class="clickable" src="#hotdogAsset" position="15 0 0" scale="3 3 3" sound="src: #croissant_sound_3" sound-events static-body></a-gltf-model>
+    <a-gltf-model id="bananaEntity" class="clickable" src="#bananaAsset" position="-10 0 4" scale="50 50 50" sound="src: #croissant_sound_1" sound-events static-body></a-gltf-model>  
+    <a-gltf-model id="coconutEntity" class="clickable" src="#coconutAsset" position="16.5 0.75 0" scale="10 10 10" sound="src: #croissant_sound_2" sound-events static-body></a-gltf-model> 
+    <a-gltf-model id="cherryEntity" class="clickable" src="#cherryAsset" position="-8 0 10" scale="20 20 20" sound="src: #XXY" sound-events static-body></a-gltf-model>  
+    <a-gltf-model id="dahliaPersonEntity" class="clickable" src="#dahliaAsset" position="7 0 0" scale="3 3 3" sound="src: #croissant_sound; volume:0.8;" sound-events static-body></a-gltf-model>  
+    <a-gltf-model id="tacoEntity" class="clickable" src="#tacoAsset" position="-11 0 1" scale="50 50 50"; sound="src: #XXX; volume:0.8;" sound-events static-body></a-gltf-model>  
+
+      
+  </a-scene>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const startButton = document.getElementById('start-experience-button');
+      const overlay = document.getElementById('start-button-overlay');
+      const sceneEl = document.querySelector('a-scene');
+      const ambientSoundEntity = document.getElementById('ambientSoundPlayer');
+
+      if (startButton && sceneEl) {
+        startButton.addEventListener('click', function handleStartClick() {
+          if (overlay) { overlay.style.display = 'none'; }
+          const audioListener = sceneEl.audioListener;
+          if (audioListener && audioListener.context && audioListener.context.state === 'suspended') {
+            audioListener.context.resume().then(function() {
+              console.log('AudioContext resumed by user gesture.');
+              if (ambientSoundEntity && ambientSoundEntity.components.sound && ambientSoundEntity.components.sound.loaded) {
+                if (!ambientSoundEntity.components.sound.isPlaying) { ambientSoundEntity.components.sound.playSound(); }
+              }
+            }).catch(function(e) { console.error('Error resuming AudioContext:', e); });
+          } else if (ambientSoundEntity && ambientSoundEntity.components.sound && ambientSoundEntity.components.sound.loaded) {
+            if (!ambientSoundEntity.components.sound.isPlaying) { ambientSoundEntity.components.sound.playSound(); }
+          }
+        }, false); 
+      } else {
+        if (!startButton) console.error("Start button not found. Audio/Video might not autoplay.");
+      }
+    });
+  </script>
+    
+    <script>
+  this.el.addEventListener('click', function () {
+  window.location.href = 'https://aframe.io'; </script>
+    
+</body>
+</html>
